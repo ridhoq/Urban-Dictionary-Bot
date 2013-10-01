@@ -1,5 +1,5 @@
 import praw
-import nltk
+from nltk import *
 import requests
 import json
 from wordnik import *
@@ -8,6 +8,7 @@ MAX_QUERY_LENGTH = 5
 UD_URL = 'http://api.urbandictionary.com/v0/define'
 WK_URL = 'http://api.wordnik.com/v4'
 WK_API_KEY = 'c637dbc760f763ad2300e03d5310e3da0dd03c6748e1df8ee'
+DEBUG_QUERY = ''
 
 def setup():
     r = praw.Reddit('Urban Dictionary Bot by u/fr023nske7ch')
@@ -65,7 +66,8 @@ def compare_with_english_dictionary(flat_comments, word_api):
     already_done = set()
     count = 0
     for comment in flat_comments:
-        tokens = nltk.word_tokenize(comment.body)
+        tokens = WordPunctTokenizer().tokenize(comment.body)
+        print tokens
         prev_queries = []
         interesting_phrases = {}
         for start in tokens:
@@ -74,31 +76,37 @@ def compare_with_english_dictionary(flat_comments, word_api):
             query_list = []
             while end < len(tokens) and end - i <= MAX_QUERY_LENGTH:
                 i = tokens.index(start)
-                while i < end and end - i <= MAX_QUERY_LENGTH:
+                while i <= end and end - i <= MAX_QUERY_LENGTH:
                     query_list.append(tokens[i])
+                    query = ' '.join(query_list)
+                    if query != "" and query not in prev_queries:
+                        print "About to make query: " + query
+                        ud_result = urban_dictionary(query)
+                        wk_result = wordnik(query, word_api)
+                        if ud_result.json().get(u'list') and not wk_result:
+                            print "Found interesting phrase: " + query
+                            interesting_phrases[query] = ud_result.json()
+                            count += 1
+                        prev_queries.append(query)
                     i += 1
-                end += 1    
-                query = ' '.join(query_list)
-                if query != "" and query not in prev_queries:
-                    print "About to make query: " + query
-                    ud_result = urban_dictionary(query)
-                    wk_result = wordnik(query, word_api)
-                    if ud_result.json().get(u'list') and not wk_result:
-                        print "Found interesting phrase: " + query
-                        interesting_phrases[query] = ud_result.json()
-                        count += 1
-                    prev_queries.append(query)
                 query_list = []
+                end += 1    
+
     print count
     print interesting_phrases
 
 def urban_dictionary(query):
     payload = {"term": query}
     result = requests.get(UD_URL, params=payload)
+    if query == DEBUG_QUERY:
+        print result.url
+        print result.json()
     return result
 
 def wordnik(query, word_api):
     result = word_api.getDefinitions(query, useCanonical='true')
+    if query == DEBUG_QUERY:
+        print result[0].text
     return result
 
 
