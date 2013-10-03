@@ -66,7 +66,7 @@ def compare_with_english_dictionary(flat_comments, word_api):
     already_done = set()
     count = 0
     for comment in flat_comments:
-        tokens = WordPunctTokenizer().tokenize(comment.body)
+        tokens = tokenize(comment)
         print tokens
         prev_queries = []
         interesting_phrases = {}
@@ -109,13 +109,42 @@ def wordnik(query, word_api):
         print result[0].text
     return result
 
+def tokenize(comment):
+    print comment.body
+    print type(comment.body)
+    comment_str = comment.body.encode("ascii")
+    print type(comment_str)
+    print comment_str
+    tokens = WordPunctTokenizer().tokenize(comment_str)
+    print tokens
+    for prev, item, next in neighborhood(tokens):
+        if item == "'" and re.match('^[a-zA-Z]+$', prev) and re.match('^[a-zA-Z]+$', next):
+            contraction = [prev, item, next]
+            i = tokens.index(item)
+            tokens[i] = ''.join(contraction)
+            tokens.remove(prev)
+            tokens.remove(next)
+
+    return tokens
+
+def neighborhood(iterable):
+    iterator = iter(iterable)
+    prev = None
+    item = iterator.next()  # throws StopIteration if empty.
+    for next in iterator:
+        yield (prev,item,next)
+        prev = item
+        item = next
+    yield (prev,item,None)
 
 
 (r, word_api) = setup()
 # submission = r.get_submission("http://www.reddit.com/r/nfl/comments/1n1tw1/49ers_qb_kaepernick_favorites_the_hate_messages/ccfhhz2")
-submission = r.get_submission("http://www.reddit.com/r/opiates/comments/1nhfg0/quick_question_regarding_different_terms_for/cciqznb")
+# submission = r.get_submission("http://www.reddit.com/r/opiates/comments/1nhfg0/quick_question_regarding_different_terms_for/cciqznb")
+submission = r.get_submission("http://www.reddit.com/r/leagueoflegends/comments/1ngkwg/why_having_friends_in_1_or_more_lower_divisions/ccirgdm")
 flat_comments = submission.comments
 # brute_force(flat_comments)
 # query_limit(flat_comments)
+# tokenize(flat_comments[0])
 compare_with_english_dictionary(flat_comments, word_api)
 # urban_dictionary("")
