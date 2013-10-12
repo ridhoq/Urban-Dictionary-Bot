@@ -1,20 +1,25 @@
 import praw
+import nltk
 from nltk import *
 import requests
 import json
 from wordnik import *
+from nltk.corpus import wordnet
+import pprint
 
-MAX_QUERY_LENGTH = 5
+MAX_QUERY_LENGTH = 3
 UD_URL = 'http://api.urbandictionary.com/v0/define'
 WK_URL = 'http://api.wordnik.com/v4'
 WK_API_KEY = 'c637dbc760f763ad2300e03d5310e3da0dd03c6748e1df8ee'
 DEBUG_QUERY = ''
+NOT_ALLOWED = (',', '.')
 
 def setup():
     r = praw.Reddit('Urban Dictionary Bot by u/fr023nske7ch')
     r.login('Urban-Dictionary-Bot', 'blumpkin4u')
     wk_client = swagger.ApiClient(WK_API_KEY, WK_URL)
     word_api = WordApi.WordApi(wk_client)
+    nltk.data.path.append('./nltk_data/')
     return (r, word_api)
 
 def brute_force(flat_comments):
@@ -62,7 +67,7 @@ def query_limit(flat_comments):
                 query_list = []
     print count
 
-def compare_with_english_dictionary(flat_comments, word_api):
+def compare_with_wordnik(flat_comments, word_api):
     already_done = set()
     count = 0
     for comment in flat_comments:
@@ -70,6 +75,7 @@ def compare_with_english_dictionary(flat_comments, word_api):
         print tokens
         prev_queries = []
         interesting_phrases = {}
+        interesting_phrases_list = []
         for start in tokens:
             i = tokens.index(start)
             end = i + 1
@@ -86,6 +92,7 @@ def compare_with_english_dictionary(flat_comments, word_api):
                         if ud_result.json().get(u'list') and not wk_result:
                             print "Found interesting phrase: " + query
                             interesting_phrases[query] = ud_result.json()
+                            interesting_phrases_list.append(query)
                             count += 1
                         prev_queries.append(query)
                     i += 1
@@ -93,7 +100,46 @@ def compare_with_english_dictionary(flat_comments, word_api):
                 end += 1    
 
     print count
-    print interesting_phrases
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(interesting_phrases_list)
+    pp.pprint(interesting_phrases)
+
+def compare_with_wordnet(flat_comments):
+    already_done = set()
+    count = 0
+    for comment in flat_comments:
+        tokens = tokenize(comment)
+        print tokens
+        prev_queries = []
+        interesting_phrases = {}
+        interesting_phrases_list = []
+        for start in tokens:
+            i = tokens.index(start)
+            end = i + 1
+            query_list = []
+            while end < len(tokens) and end - i <= MAX_QUERY_LENGTH:
+                i = tokens.index(start)
+                while i <= end and end - i <= MAX_QUERY_LENGTH:
+                    query_list.append(tokens[i])
+                    query = ' '.join(query_list)
+                    if query != "" and query not in prev_queries:
+                        print "About to make query: " + query
+                        ud_result = urban_dictionary(query)
+                        wk_result = wordnet_check(query)
+                        if ud_result.json().get(u'list') and not wk_result:
+                            print "Found interesting phrase: " + query
+                            interesting_phrases[query] = ud_result.json()
+                            interesting_phrases_list.append(query) 
+                            count += 1
+                        prev_queries.append(query)
+                    i += 1
+                query_list = []
+                end += 1    
+
+    print count
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(interesting_phrases_list)
+    pp.pprint(interesting_phrases)
 
 def urban_dictionary(query):
     payload = {"term": query}
@@ -109,21 +155,39 @@ def wordnik(query, word_api):
         print result[0].text
     return result
 
+def wordnet_check(query):
+    if not wordnet.synsets(query):
+      return None
+    else:
+      return wordnet.synsets(query)
+
 def tokenize(comment):
-    print comment.body
-    print type(comment.body)
     comment_str = comment.body.encode("ascii")
-    print type(comment_str)
-    print comment_str
     tokens = WordPunctTokenizer().tokenize(comment_str)
     print tokens
-    for prev, item, next in neighborhood(tokens):
+    for prev, item, next in list(neighborhood(tokens)):
+        if prev:
+            print "prev: " + prev
+        if item:
+            print "item: " + item
+        if next:
+            print "next: " + next
+        if item in NOT_ALLOWED:
+            print "Removing " + item
+            tokens.remove(item)
+
+        # Checks if the previous token and the next token are letters if this token is '
         if item == "'" and re.match('^[a-zA-Z]+$', prev) and re.match('^[a-zA-Z]+$', next):
             contraction = [prev, item, next]
             i = tokens.index(item)
             tokens[i] = ''.join(contraction)
+            print "New token: " + tokens[i]
             tokens.remove(prev)
             tokens.remove(next)
+
+    print "Cleaned tokens:"
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(tokens)
 
     return tokens
 
@@ -146,5 +210,11 @@ flat_comments = submission.comments
 # brute_force(flat_comments)
 # query_limit(flat_comments)
 # tokenize(flat_comments[0])
-compare_with_english_dictionary(flat_comments, word_api)
+import time
+start = time.time()
+compare_with_wordnik(flat_comments, word_api)
+print "compare_with_wordnik took", time.time() - start, "seconds."
+start = time.time()
+compare_with_wordnet(flat_comments)
+print "compare_with_wordnet took", time.time() - start, "seconds."
 # urban_dictionary("")
