@@ -106,7 +106,6 @@ def compare_with_external(tokens, function, *args):
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(interesting_phrases_list)
     pp.pprint(interesting_phrases)
-    print type(interesting_phrases)
     return interesting_phrases
 
 def urban_dictionary(query):
@@ -135,14 +134,6 @@ def tokenize(comment):
     print tokens
     for prev, item, next in list(neighborhood(tokens)):
         found_contraction = False
-        # if prev:
-        #     print "prev: " + prev
-        # if item:
-        #     print "item: " + item
-        # if next:
-        #     print "next: " + next
-
-        # Checks if the previous token and the next token are letters if this token is '
         if item == "'" and re.match('^[a-zA-Z]+$', prev) and re.match('^[a-zA-Z]+$', next):
             contraction = [prev, item, next]
             i = tokens.index(item)
@@ -175,37 +166,30 @@ def neighborhood(iterable):
 
 def reply(r, comment, interesting_phrases):
     newline = "\n\n"
-    reply = "I found " + str(len(interesting_phrases.keys())) + " words/phrases defined by Urban Dictionary in this comment!" + newline
-    count = 1
+    reply = "I found " + str(len(interesting_phrases.keys())) + " words/phrases defined by Urban Dictionary in this comment!" + newline + "***" + newline
     for phrase in interesting_phrases:
         reply += ("[" + phrase + "](" + interesting_phrases[phrase]['list'][0]['permalink'] + "): " + interesting_phrases[phrase]['list'][0]['definition'] + newline)
-        reply += ("Example: *" + interesting_phrases[phrase]['list'][0]['example'] + "*" + newline + newline)
-        count += 1
-    reply += "If you have any questions about me, you can message me or post on /r/UrbanDictionaryBot."
+        for line in interesting_phrases[phrase]['list'][0]['example'].splitlines():
+            reply += (">*" + line + "*" + newline)
+        reply += ("***" + newline)
+    reply += "If you have any questions about me, you can [message me](http://www.reddit.com/message/compose/?to=Urban-Dictionary-Bot) or post on /r/UrbanDictionaryBot."
     comment.reply(reply)
 
 
 (r, word_api) = setup()
-
-# submission = r.get_submission("http://www.reddit.com/r/nfl/comments/1n1tw1/49ers_qb_kaepernick_favorites_the_hate_messages/ccfhhz2")
-# submission = r.get_submission("http://www.reddit.com/r/opiates/comments/1nhfg0/quick_question_regarding_different_terms_for/cciqznb")
-# submission = r.get_submission("http://www.reddit.com/r/leagueoflegends/comments/1ngkwg/why_having_friends_in_1_or_more_lower_divisions/ccirgdm")
-# submission = r.get_submission("http://www.reddit.com/r/pics/comments/1od06f/the_most_unexplained_photos_that_exist_w/ccr6mt9")
-# submission = r.get_submission("http://www.reddit.com/r/depression/comments/1nfxka/boyfriend_is_on_a_downswing_told_me_about_it_out/ccrc80f")
-submission = r.get_submission("http://www.reddit.com/r/UrbanDictionaryBot/comments/1omnd5/test")
-comments = praw.helpers.flatten_tree(submission.comments)
-# flat_comments = submission.comments
-# brute_force(flat_comments)
-# query_limit(flat_comments)
-# while True:
+user = r.get_redditor('natidawg')
+comments = user.get_comments(limit=100)
+while True:
     # comments = r.get_comments('all', limit='500')
-for comment in comments:
-    try:
-        import time
-        start = time.time()
-        tokens = tokenize(comment)
-        start = time.time()
-        interesting_phrases = compare_with_external(tokens, wordnik, word_api)
-        reply(r, comment, interesting_phrases)
-    except:
-        pass
+    for comment in comments:
+        try:
+            import time
+            start = time.time()
+            tokens = tokenize(comment)
+            start = time.time()
+            interesting_phrases = compare_with_external(tokens, wordnik, word_api)
+            if interesting_phrases:
+                print "ABOUT TO REPLY!!!"
+                reply(r, comment, interesting_phrases)
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt
