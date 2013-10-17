@@ -8,7 +8,7 @@ import pprint
 import string
 import ConfigParser
 
-MAX_QUERY_LENGTH = 3
+MAX_QUERY_LENGTH = 2
 UD_URL = 'http://api.urbandictionary.com/v0/define'
 WK_URL = 'http://api.wordnik.com/v4'
 DEBUG_QUERY = ''
@@ -87,10 +87,10 @@ def compare_with_external(tokens, function, *args):
                 query_list.append(tokens[i])
                 query = ' '.join(query_list)
                 if query != "" and query not in prev_queries:
-                    # print "About to check if following phrase exists in english: " + query  
+                    print "About to check if following phrase exists in english: " + query  
                     ex_result = function(query, *args)
                     if not ex_result:
-                        # print "Now checking if exists in urban dictionary"
+                        print "Now checking if exists in urban dictionary"
                         ud_result = urban_dictionary(query)
                         if ud_result.json().get(u'list'):
                             print "****FOUND INTERESTING PHRASE****  " + query
@@ -106,6 +106,8 @@ def compare_with_external(tokens, function, *args):
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(interesting_phrases_list)
     pp.pprint(interesting_phrases)
+    print type(interesting_phrases)
+    return interesting_phrases
 
 def urban_dictionary(query):
     payload = {"term": query}
@@ -171,6 +173,17 @@ def neighborhood(iterable):
         item = next
     yield (prev,item,None)
 
+def reply(r, comment, interesting_phrases):
+    newline = "\n\n"
+    reply = "I found " + str(len(interesting_phrases.keys())) + " words/phrases defined by Urban Dictionary in this comment!" + newline
+    count = 1
+    for phrase in interesting_phrases:
+        reply += ("[" + phrase + "](" + interesting_phrases[phrase]['list'][0]['permalink'] + "): " + interesting_phrases[phrase]['list'][0]['definition'] + newline)
+        reply += ("Example: *" + interesting_phrases[phrase]['list'][0]['example'] + "*" + newline + newline)
+        count += 1
+    reply += "If you have any questions about me, you can message me or post on /r/UrbanDictionaryBot."
+    comment.reply(reply)
+
 
 (r, word_api) = setup()
 
@@ -179,14 +192,20 @@ def neighborhood(iterable):
 # submission = r.get_submission("http://www.reddit.com/r/leagueoflegends/comments/1ngkwg/why_having_friends_in_1_or_more_lower_divisions/ccirgdm")
 # submission = r.get_submission("http://www.reddit.com/r/pics/comments/1od06f/the_most_unexplained_photos_that_exist_w/ccr6mt9")
 # submission = r.get_submission("http://www.reddit.com/r/depression/comments/1nfxka/boyfriend_is_on_a_downswing_told_me_about_it_out/ccrc80f")
+submission = r.get_submission("http://www.reddit.com/r/UrbanDictionaryBot/comments/1omnd5/test")
+comments = praw.helpers.flatten_tree(submission.comments)
 # flat_comments = submission.comments
 # brute_force(flat_comments)
 # query_limit(flat_comments)
-while True:
-    comments = r.get_comments('all', limit='500')
-    for commment in comments:
+# while True:
+    # comments = r.get_comments('all', limit='500')
+for comment in comments:
+    try:
         import time
         start = time.time()
-        tokens = tokenize(comments.next())
+        tokens = tokenize(comment)
         start = time.time()
-        compare_with_external(tokens, wordnik, word_api)
+        interesting_phrases = compare_with_external(tokens, wordnik, word_api)
+        reply(r, comment, interesting_phrases)
+    except:
+        pass
