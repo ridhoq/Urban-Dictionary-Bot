@@ -12,7 +12,7 @@ MAX_QUERY_LENGTH = 3
 UD_URL = 'http://api.urbandictionary.com/v0/define'
 WK_URL = 'http://api.wordnik.com/v4'
 DEBUG_QUERY = ''
-NOT_ALLOWED = (',', '.', '!', '?')
+NOT_ALLOWED = ('http', '://')
 
 def setup():
     config = ConfigParser.RawConfigParser()
@@ -87,10 +87,10 @@ def compare_with_external(tokens, function, *args):
                 query_list.append(tokens[i])
                 query = ' '.join(query_list)
                 if query != "" and query not in prev_queries:
-                    print "About to check if following phrase exists in english: " + query  
+                    # print "About to check if following phrase exists in english: " + query  
                     ex_result = function(query, *args)
                     if not ex_result:
-                        print "Now checking if exists in urban dictionary"
+                        # print "Now checking if exists in urban dictionary"
                         ud_result = urban_dictionary(query)
                         if ud_result.json().get(u'list'):
                             print "****FOUND INTERESTING PHRASE****  " + query
@@ -133,12 +133,12 @@ def tokenize(comment):
     print tokens
     for prev, item, next in list(neighborhood(tokens)):
         found_contraction = False
-        if prev:
-            print "prev: " + prev
-        if item:
-            print "item: " + item
-        if next:
-            print "next: " + next
+        # if prev:
+        #     print "prev: " + prev
+        # if item:
+        #     print "item: " + item
+        # if next:
+        #     print "next: " + next
 
         # Checks if the previous token and the next token are letters if this token is '
         if item == "'" and re.match('^[a-zA-Z]+$', prev) and re.match('^[a-zA-Z]+$', next):
@@ -150,12 +150,10 @@ def tokenize(comment):
             tokens.remove(next)
             found_contraction = True
 
-        if item in string.punctuation:
+        if item in string.punctuation or item in NOT_ALLOWED:
             if not found_contraction:
                 print "Removing: " + item
                 tokens.remove(item)
-
-        print ""
 
     print "Cleaned tokens:"
     pp = pprint.PrettyPrinter(indent=4)
@@ -175,7 +173,7 @@ def neighborhood(iterable):
 
 
 (r, word_api) = setup()
-comments = r.get_all_comments()
+
 # submission = r.get_submission("http://www.reddit.com/r/nfl/comments/1n1tw1/49ers_qb_kaepernick_favorites_the_hate_messages/ccfhhz2")
 # submission = r.get_submission("http://www.reddit.com/r/opiates/comments/1nhfg0/quick_question_regarding_different_terms_for/cciqznb")
 # submission = r.get_submission("http://www.reddit.com/r/leagueoflegends/comments/1ngkwg/why_having_friends_in_1_or_more_lower_divisions/ccirgdm")
@@ -185,13 +183,10 @@ comments = r.get_all_comments()
 # brute_force(flat_comments)
 # query_limit(flat_comments)
 while True:
-    import time
-    start = time.time()
-    tokens = tokenize(comments.next())
-    print "tokenize took", time.time() - start, "seconds."
-    start = time.time()
-    compare_with_external(tokens, wordnik, word_api)
-    print "comparing with wordnik took", time.time() - start, "seconds."
-    # start = time.time()
-    # compare_with_external(tokens, wordnet_check)
-    # print "comparing with wordnet took", time.time() - start, "seconds."
+    comments = r.get_comments('all', limit='500')
+    for commment in comments:
+        import time
+        start = time.time()
+        tokens = tokenize(comments.next())
+        start = time.time()
+        compare_with_external(tokens, wordnik, word_api)
