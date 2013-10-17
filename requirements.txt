@@ -1,4 +1,4 @@
 praw
-requests
+requests>=1.2.0
 nltk
 wordnik
