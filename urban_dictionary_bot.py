@@ -188,8 +188,11 @@ while True:
             tokens = tokenize(comment)
             start = time.time()
             interesting_phrases = compare_with_external(tokens, wordnik, word_api)
+            print "TIME TO PROCESS: " + str(time.time() - start)
             if interesting_phrases:
                 print "ABOUT TO REPLY!!!"
                 reply(r, comment, interesting_phrases)
         except KeyboardInterrupt:
             raise KeyboardInterrupt
+        # except:
+        #     pass
