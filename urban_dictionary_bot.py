@@ -6,17 +6,22 @@ from wordnik import *
 from nltk.corpus import wordnet
 import pprint
 import string
+import ConfigParser
 
 MAX_QUERY_LENGTH = 3
 UD_URL = 'http://api.urbandictionary.com/v0/define'
 WK_URL = 'http://api.wordnik.com/v4'
-WK_API_KEY = 'c637dbc760f763ad2300e03d5310e3da0dd03c6748e1df8ee'
 DEBUG_QUERY = ''
 NOT_ALLOWED = (',', '.', '!', '?')
 
 def setup():
+    config = ConfigParser.RawConfigParser()
+    config.read('setup.cfg')
+    USER = config.get('setup', 'USER')
+    PASSWORD = config.get('setup', 'PASSWORD')
     r = praw.Reddit('Urban Dictionary Bot by u/fr023nske7ch')
-    r.login('Urban-Dictionary-Bot', 'blumpkin4u')
+    r.login(USER, PASSWORD)
+    WK_API_KEY = config.get('setup', 'WK_API_KEY')
     wk_client = swagger.ApiClient(WK_API_KEY, WK_URL)
     word_api = WordApi.WordApi(wk_client)
     nltk.data.path.append('./nltk_data/')
@@ -52,9 +57,9 @@ def query_limit(flat_comments):
             i = tokens.index(start)
             end = i + 1
             query_list = []
-            while end < len(tokens) and end - i <= MAX_QUERY_LENGTH:
+            while end < len(tokens) and end - i < MAX_QUERY_LENGTH:
                 i = tokens.index(start)
-                while i < end and end - i <= MAX_QUERY_LENGTH:
+                while i < end and end - i < MAX_QUERY_LENGTH:
                     query_list.append(tokens[i])
                     i += 1
                 end += 1    
@@ -88,7 +93,7 @@ def compare_with_external(tokens, function, *args):
                         print "Now checking if exists in urban dictionary"
                         ud_result = urban_dictionary(query)
                         if ud_result.json().get(u'list'):
-                            print "Found interesting phrase: " + query
+                            print "****FOUND INTERESTING PHRASE****  " + query
                             interesting_phrases[query] = ud_result.json()
                             interesting_phrases_list.append(query) 
                             count += 1
@@ -123,10 +128,11 @@ def wordnet_check(query):
       return wordnet.synsets(query)
 
 def tokenize(comment):
-    comment_str = comment.body.encode("ascii")
+    comment_str = comment.body
     tokens = WordPunctTokenizer().tokenize(comment_str)
     print tokens
     for prev, item, next in list(neighborhood(tokens)):
+        found_contraction = False
         if prev:
             print "prev: " + prev
         if item:
@@ -142,10 +148,12 @@ def tokenize(comment):
             print "New token: " + tokens[i]
             tokens.remove(prev)
             tokens.remove(next)
+            found_contraction = True
 
-        if item in NOT_ALLOWED:
-            print "Removing: " + item
-            tokens.remove(item)
+        if item in string.punctuation:
+            if not found_contraction:
+                print "Removing: " + item
+                tokens.remove(item)
 
         print ""
 
@@ -167,21 +175,23 @@ def neighborhood(iterable):
 
 
 (r, word_api) = setup()
+comments = r.get_all_comments()
 # submission = r.get_submission("http://www.reddit.com/r/nfl/comments/1n1tw1/49ers_qb_kaepernick_favorites_the_hate_messages/ccfhhz2")
 # submission = r.get_submission("http://www.reddit.com/r/opiates/comments/1nhfg0/quick_question_regarding_different_terms_for/cciqznb")
 # submission = r.get_submission("http://www.reddit.com/r/leagueoflegends/comments/1ngkwg/why_having_friends_in_1_or_more_lower_divisions/ccirgdm")
 # submission = r.get_submission("http://www.reddit.com/r/pics/comments/1od06f/the_most_unexplained_photos_that_exist_w/ccr6mt9")
-submission = r.get_submission("http://www.reddit.com/r/depression/comments/1nfxka/boyfriend_is_on_a_downswing_told_me_about_it_out/ccrc80f")
-flat_comments = submission.comments
+# submission = r.get_submission("http://www.reddit.com/r/depression/comments/1nfxka/boyfriend_is_on_a_downswing_told_me_about_it_out/ccrc80f")
+# flat_comments = submission.comments
 # brute_force(flat_comments)
 # query_limit(flat_comments)
-import time
-start = time.time()
-tokens = tokenize(flat_comments[0])
-print "tokenize took", time.time() - start, "seconds."
-start = time.time()
-compare_with_external(tokens, wordnik, word_api)
-print "comparing with wordnik took", time.time() - start, "seconds."
-start = time.time()
-compare_with_external(tokens, wordnet_check)
-print "comparing with wordnet took", time.time() - start, "seconds."
+while True:
+    import time
+    start = time.time()
+    tokens = tokenize(comments.next())
+    print "tokenize took", time.time() - start, "seconds."
+    start = time.time()
+    compare_with_external(tokens, wordnik, word_api)
+    print "comparing with wordnik took", time.time() - start, "seconds."
+    # start = time.time()
+    # compare_with_external(tokens, wordnet_check)
+    # print "comparing with wordnet took", time.time() - start, "seconds."
