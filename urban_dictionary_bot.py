@@ -7,6 +7,7 @@ from nltk.corpus import wordnet
 import pprint
 import string
 import ConfigParser
+import logging, logging.handlers
 
 MAX_QUERY_LENGTH = 2
 UD_URL = 'http://api.urbandictionary.com/v0/define'
@@ -15,6 +16,7 @@ DEBUG_QUERY = ''
 NOT_ALLOWED = ('http', '://')
 
 def setup():
+    setup_logging()
     config = ConfigParser.RawConfigParser()
     config.read('setup.cfg')
     USER = config.get('setup', 'USER')
@@ -26,6 +28,21 @@ def setup():
     word_api = WordApi.WordApi(wk_client)
     nltk.data.path.append('./nltk_data/')
     return (r, word_api)
+
+def setup_logging():
+    logger = logging.getLogger('udb')
+    logger.setLevel(logging.DEBUG)
+
+    file_handler = logging.FileHandler('udb.log')
+    file_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # smtp_handler = logging.handlers.SMTPHandler('127.0.0.1:25', 'error@udb.com', 'ridwanhoq@gmail.com', 'UDB ERROR!')
+    # smtp_handler.setLevel(logging.ERROR)
+    # smtp_handler.setFormatter(formatter)
+    # logger.addHandler(smtp_handler)
 
 def brute_force(flat_comments):
     already_done = set()
@@ -73,6 +90,7 @@ def query_limit(flat_comments):
     print count
 
 def compare_with_external(tokens, function, *args):
+    logger = logging.getLogger('udb')
     count = 0
     prev_queries = []
     interesting_phrases = {}
@@ -87,13 +105,13 @@ def compare_with_external(tokens, function, *args):
                 query_list.append(tokens[i])
                 query = ' '.join(query_list)
                 if query != "" and query not in prev_queries:
-                    print "About to check if following phrase exists in english: " + query  
+                    logger.info("About to check if following phrase exists in english: " + query)  
                     ex_result = function(query, *args)
                     if not ex_result:
-                        print "Now checking if exists in urban dictionary"
+                        logger.info("Now checking if exists in urban dictionary")
                         ud_result = urban_dictionary(query)
                         if ud_result.json().get(u'list'):
-                            print "****FOUND INTERESTING PHRASE****  " + query
+                            logger.info("****FOUND INTERESTING PHRASE****  " + query)
                             interesting_phrases[query] = ud_result.json()
                             interesting_phrases_list.append(query) 
                             count += 1
@@ -102,24 +120,17 @@ def compare_with_external(tokens, function, *args):
             query_list = []
             end += 1    
 
-    print count
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(interesting_phrases_list)
-    pp.pprint(interesting_phrases)
+    logger.info("Interesting phrases list: " + pprint.pformat(interesting_phrases_list))
+    logger.info("interesting phrases (full dict): " + pprint.pformat(interesting_phrases))
     return interesting_phrases
 
 def urban_dictionary(query):
     payload = {"term": query}
     result = requests.get(UD_URL, params=payload)
-    if query == DEBUG_QUERY:
-        print result.url
-        print result.json()
     return result
 
 def wordnik(query, word_api):
     result = word_api.getDefinitions(query, useCanonical='true')
-    if query == DEBUG_QUERY:
-        print result[0].text
     return result
 
 def wordnet_check(query):
@@ -129,28 +140,28 @@ def wordnet_check(query):
       return wordnet.synsets(query)
 
 def tokenize(comment):
+    logger = logging.getLogger('udb')
     comment_str = comment.body
     tokens = WordPunctTokenizer().tokenize(comment_str)
-    print tokens
+    logger.info("Tokens (before cleaning): " + str(tokens))
     for prev, item, next in list(neighborhood(tokens)):
         found_contraction = False
         if item == "'" and re.match('^[a-zA-Z]+$', prev) and re.match('^[a-zA-Z]+$', next):
             contraction = [prev, item, next]
             i = tokens.index(item)
             tokens[i] = ''.join(contraction)
-            print "New token: " + tokens[i]
+            logger.info("New token: " + tokens[i])
             tokens.remove(prev)
             tokens.remove(next)
             found_contraction = True
 
         if item in string.punctuation or item in NOT_ALLOWED:
             if not found_contraction:
-                print "Removing: " + item
+                logger.info("Removing: " + item)
                 tokens.remove(item)
 
-    print "Cleaned tokens:"
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(tokens)
+    
+    logger.info("Cleaned tokens: " + pprint.pformat(tokens))
 
     return tokens
 
@@ -177,10 +188,10 @@ def reply(r, comment, interesting_phrases):
 
 
 (r, word_api) = setup()
-user = r.get_redditor('natidawg')
+logger = logging.getLogger('udb')
 comments = user.get_comments(limit=100)
 while True:
-    # comments = r.get_comments('all', limit='500')
+    comments = r.get_comments('all', limit='500')
     for comment in comments:
         try:
             import time
@@ -188,11 +199,11 @@ while True:
             tokens = tokenize(comment)
             start = time.time()
             interesting_phrases = compare_with_external(tokens, wordnik, word_api)
-            print "TIME TO PROCESS: " + str(time.time() - start)
+            logger.info("TIME TO PROCESS: " + str(time.time() - start))
             if interesting_phrases:
-                print "ABOUT TO REPLY!!!"
+                logger.info("ABOUT TO REPLY!!!")
                 reply(r, comment, interesting_phrases)
         except KeyboardInterrupt:
             raise KeyboardInterrupt
-        # except:
-        #     pass
+        except:
+            logger.exception('')
