@@ -189,7 +189,6 @@ def reply(r, comment, interesting_phrases):
 
 (r, word_api) = setup()
 logger = logging.getLogger('udb')
-comments = user.get_comments(limit=100)
 while True:
     comments = r.get_comments('all', limit='500')
     for comment in comments:
